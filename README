@@ -1,3 +1,7 @@
 How to build
 
+Linux:
 gcc bit32.c -shared -fpic -I../../src/lua/src -o bit32.so
+
+Windows:
+I don't know, sorry. I need someone to explain me that!

@@ -215,6 +215,27 @@ def compile_def(name, l, immed=False):
         elif word == "QUIT":
             squit.append(here)
             here += 2
+        elif word == 'S"':
+            nw = l[i][:-1] #Remove trailing "
+            i += 1
+            setmemory(here, df["(branch)"])
+            here += 2
+            stack.append(here)
+            here += 2
+            stack.append(here)
+            for c in nw:
+                memory[here] = ord(c)
+                here += 1
+            k = stack.pop()
+            setmemory(stack.pop(), here)
+            setmemory(here, df["(lit)"])
+            here += 2
+            setmemory(here, k)
+            here += 2
+            setmemory(here, df["(lit)"])
+            here += 2
+            setmemory(here, len(nw))
+            here += 2
         else:
             setmemory(here, df[word])
             here += 2
