@@ -2,10 +2,25 @@ local CYCLES_PER_STEP = 1000
 local MAX_CYCLES = 100000
 local MAX_LINE_LENGHT = 42
 
-local modpath = minetest.get_modpath("forth_computer")
-package.cpath = modpath.."/?.so;"..modpath.."/?.dll;"..package.cpath;
+function loadpkg(na)
+	local modpath = minetest.get_modpath("forth_computer")
+	local ol = package.cpath
+	local sp = {modpath.."/?.dll", modpath.."/?.so.32", modpath.."/?.so.64"}
+	for i=1,#sp do
+		package.cpath = sp[i]
+		e, lib = pcall(require, na)
+		package.cpath = ol
+		if e then
+			return lib
+		end
+	end
+	package.cpath = ol
+	return nil
+end
 
-local bit32 = require 'bit32';
+local modpath = minetest.get_modpath("forth_computer")
+
+local bit32 = loadpkg("bit32")
 
 dofile(modpath.."/computer_memory.lua")
 
