@@ -62,10 +62,29 @@ local function dehashpos(str)
 	return {x = tonumber(l[1]), y = tonumber(l[2]), z = tonumber(l[3])}
 end
 
-function newline(text, toadd)
+local function newline(text, toadd)
 	local f = lines(text)
 	table.insert(f, toadd)
 	return table.concat(f, "\n", 2)
+end
+
+local function add_char(text, char)
+	local ls = lines(text)
+	local ll = ls[#ls]
+	if char=="\n" or char=="\r" then
+		return newline(text,"")
+	elseif string.len(ll)>=MAX_LINE_LENGHT then
+		return newline(text, char)
+	else
+		return text..char
+	end
+end
+
+local function add_text(text, toadd)
+	for i=1, string.len(toadd) do
+		text = add_char(text, string.sub(toadd, i, i))
+	end
+	return text
 end
 
 local function readC(cptr, addr)
@@ -145,8 +164,13 @@ local function receive(cptr, caddr, clen, raddr)
 		end
 		cptr.X = string.len(event)
 	else
-		cptr.X = 0
+		cptr.X = u16(-1)
 	end
+end
+
+local function delete_message(cptr, caddr, clen)
+	local channel = string_at(cptr, caddr, clen)
+	cptr.digiline_events[channel] = nil
 end
 
 local function set_channel(cptr, caddr, clen)
@@ -168,7 +192,7 @@ local function run_computer(pos,cptr)
 		if f == nil then return end
 		--print("Instr: "..tostring(instr).." PC:  "..tostring(cptr.PC).." SP: "..tostring(cptr.SP).." RP: "..tostring(cptr.RP).." X: "..tostring(cptr.X).." Y: "..tostring(cptr.Y).." Z: "..tostring(cptr.Z).." I: "..tostring(cptr.I))
 		cptr.PC = bit32.band(cptr.PC+1, 0xffff)
-		setfenv(f, {cptr = cptr, pos=pos, emit=emit, receive=receive, set_channel=set_channel, send_message=send_message, u16=u16, u32=u32, s16=s16, s32=s32, read=read, write=write, readC=readC, writeC=writeC, push=push, pop=pop, rpush=rpush, rpop=rpop, bit32=bit32, math=math})
+		setfenv(f, {cptr = cptr, pos=pos, emit=emit, receive=receive, delete_message=delete_message, set_channel=set_channel, send_message=send_message, u16=u16, u32=u32, s16=s16, s32=s32, read=read, write=write, readC=readC, writeC=writeC, push=push, pop=pop, rpush=rpush, rpop=rpop, bit32=bit32, math=math})
 		f()
 		cptr.cycles = cptr.cycles - 1
 		if cptr.paused or cptr.cycles == 0 then
@@ -285,11 +309,12 @@ ITABLE_RAW = {
 	[0x4e] = "cptr.Y = read(cptr, cptr.PC); cptr.PC = u16(cptr.PC+2)",
 	[0x4f] = "cptr.Z = read(cptr, cptr.PC); cptr.PC = u16(cptr.PC+2)",
 	
-	[0x50] = "if cptr.has_input then\ncptr.has_input = false\nelse\ncptr.paused = true\ncptr.PC = u16(cptr.PC-1)\nend",
-	[0x51] = "emit(pos, cptr.X, cptr)",
+	-- [0x50] = "if cptr.has_input then\ncptr.has_input = false\nelse\ncptr.paused = true\ncptr.PC = u16(cptr.PC-1)\nend",
+	-- [0x51] = "emit(pos, cptr.X, cptr)",
 	[0x52] = "receive(cptr, cptr.X, cptr.Y, cptr.Z)", -- Digiline receive
-	[0x53] = "send_message(pos, cptr, cptr.X, cptr.Y)", -- Digiline send
-	[0x54] = "set_channel(cptr, cptr.X, cptr.Y)", -- Digiline set channel
+	[0x53] = "delete_message(cptr, cptr.X, cptr.Y)",
+	[0x54] = "send_message(pos, cptr, cptr.X, cptr.Y)", -- Digiline send
+	[0x55] = "set_channel(cptr, cptr.X, cptr.Y)", -- Digiline set channel
 }
 
 ITABLE = {}
@@ -348,8 +373,9 @@ local function write_file(fn, tbl)
 end
 
 local cptrs = read_file(wpath.."/forth_computers")
+local screens = read_file(wpath.."/screens")
 
-local on_digiline_receive = function (pos, node, channel, msg)
+local on_computer_digiline_receive = function (pos, node, channel, msg)
 	local cptr = cptrs[hashpos(pos)].cptr
 	if cptr == nil then return end
 	cptr.digiline_events[channel] = msg
@@ -363,50 +389,81 @@ minetest.register_node("forth_computer:computer",{
 	digiline = 
 	{
 		receptor = {},
-		effector = {action = on_digiline_receive},
+		effector = {action = on_computer_digiline_receive},
 	},
 	on_construct = function(pos)
-		local meta=minetest.get_meta(pos)
-		meta:set_string("text","\n\n\n\n\n\n\n\n\n\n")
-		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr(), fmodif=false}
+		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
 	end,
 	on_destruct = function(pos)
 		cptrs[hashpos(pos)] = nil
 	end,
+})
+
+local on_screen_digiline_receive = function (pos, node, channel, msg)
+	if channel == "screen" then
+		local meta = minetest.get_meta(pos)
+		local ntext = add_text(meta:get_string("text"), msg)
+		meta:set_string("text",ntext)
+		screens[hashpos(pos)].fmodif = true
+	end
+end
+
+minetest.register_node("forth_computer:screen",{
+	description = "Screen",
+	tiles = {"screen.png"},
+	groups = {cracky=3},
+	sounds = default.node_sound_stone_defaults(),
+	digiline = 
+	{
+		receptor = {},
+		effector = {action = on_screen_digiline_receive},
+	},
+	on_construct = function(pos)
+		local meta=minetest.get_meta(pos)
+		meta:set_string("text","\n\n\n\n\n\n\n\n\n\n")
+		screens[hashpos(pos)] = {pos=pos, fmodif=false}
+	end,
+	on_destruct = function(pos)
+		screens[hashpos(pos)] = nil
+	end,
 	on_rightclick = function(pos, node, clicker)
 		local meta = minetest.get_meta(pos)
 		local name = clicker:get_player_name()
-		if cptrs[hashpos(pos)] == nil then
-			cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr(), fmodif=false}
+		if screens[hashpos(pos)] == nil then
+			screens[hashpos(pos)] = {pos=pos, fmodif=false}
 		end
-		cptrs[hashpos(pos)].cptr.pname = name
+		screens[hashpos(pos)].pname = name
 		on_formspec_close(name, function()
-			local c = cptrs[hashpos(pos)]
-			if c~= nil then c.cptr.pname = nil end
+			local s = screens[hashpos(pos)]
+			if s~= nil then s.pname = nil end
 		end)
-		minetest.show_formspec(name,"computer"..hashpos(pos),create_formspec(meta:get_string("text")))
+		minetest.show_formspec(name,"screen"..hashpos(pos),create_formspec(meta:get_string("text")))
 	end,
 })
+
 
 minetest.register_globalstep(function(dtime)
 	for _,i in pairs(cptrs) do
 		run_computer(i.pos, i.cptr)
-		if i.cptr.fmodif then
-			i.cptr.fmodif=false
-			if i.cptr.pname~=nil then
+	end
+	for _,i in pairs(screens) do
+		if i.fmodif then
+			i.fmodif=false
+			if i.pname~=nil then
 				local meta = minetest.get_meta(i.pos)
-				minetest.show_formspec(i.cptr.pname,"computer"..hashpos(i.pos),create_formspec(meta:get_string("text")))
+				minetest.show_formspec(i.pname,"screen"..hashpos(i.pos),create_formspec(meta:get_string("text")))
 			end
 		end
 	end
 end)
 
 minetest.register_on_shutdown(function()
-	for _,i in pairs(cptrs) do
-		i.cptr.fmodif = false
-		i.cptr.panme = nil
+	for _,i in pairs(screens) do
+		i.fmodif = false
+		i.pname = nil
 	end
 	write_file(wpath.."/forth_computers",cptrs)
+	write_file(wpath.."/screens",screens)
 end)
 
 function escape(x)
@@ -426,23 +483,19 @@ function create_formspec(text)
 end
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
-	if formname:sub(1,8)~="computer" then return end
+	if formname:sub(1,6)~="screen" then return end
 	if fields["f"]==nil or fields["f"]=="" then return end
-	local pos = dehashpos(formname:sub(9,-1))
-	local c = cptrs[hashpos(pos)]
-	if c==nil then return end
-	local cptr=c.cptr
-	cptr.has_input = true
+	local pos = dehashpos(formname:sub(7,-1))
+	local s = screens[hashpos(pos)]
+	if s==nil then return end
 	if string.len(fields["f"])>MAX_LINE_LENGHT then
 		fields["f"] = string.sub(fields["f"],1,MAX_LINE_LENGHT)
 	end
-	for i=1,string.len(fields["f"]) do
-		cptr[15+i] = string.byte(fields["f"],i)
-	end
-	write(cptr, 0, string.len(fields["f"]))
+	digiline:receptor_send(pos, digiline.rules.default, "screen", fields["f"])
 	local meta = minetest.get_meta(pos)
 	--local ntext = newline(meta:get_string("text"),fields["f"])
-	local ntext = meta:get_string("text")..fields["f"]
+	--local ntext = meta:get_string("text")..fields["f"]
+	local ntext = add_text(meta:get_string("text"), fields["f"])
 	meta:set_string("text",ntext)
 	minetest.show_formspec(player:get_player_name(),formname,create_formspec(ntext))
 end)
