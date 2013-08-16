@@ -353,7 +353,7 @@ end)
 
 
 for i, v in pairs(ITABLE_RAW) do
-	ITABLE[i] = loadstring(v)
+	ITABLE[i] = loadstring(v) -- Parse everything at the beginning, way faster
 end
 
 local wpath = minetest.get_worldpath()
@@ -400,8 +400,8 @@ minetest.register_node("forth_computer:computer",{
 })
 
 local on_screen_digiline_receive = function (pos, node, channel, msg)
-	if channel == "screen" then
-		local meta = minetest.get_meta(pos)
+	local meta = minetest.get_meta(pos)
+	if channel == meta:get_string("channel") then
 		local ntext = add_text(meta:get_string("text"), msg)
 		meta:set_string("text",ntext)
 		screens[hashpos(pos)].fmodif = true
@@ -422,13 +422,20 @@ minetest.register_node("forth_computer:screen",{
 		local meta=minetest.get_meta(pos)
 		meta:set_string("text","\n\n\n\n\n\n\n\n\n\n")
 		screens[hashpos(pos)] = {pos=pos, fmodif=false}
+		meta:set_string("formspec", "field[channel;Channel;${channel}]")
+	end,
+	on_receive_fields = function(pos, formname, fields, sender)
+		local meta = minetest.get_meta(pos)
+		fields.channel = fields.channel or ""
+		meta:set_string("channel", fields.channel)
+		meta:set_string("formspec", "")
 	end,
 	on_destruct = function(pos)
 		screens[hashpos(pos)] = nil
 	end,
 	on_rightclick = function(pos, node, clicker)
-		local meta = minetest.get_meta(pos)
 		local name = clicker:get_player_name()
+		local meta = minetest.get_meta(pos)
 		if screens[hashpos(pos)] == nil then
 			screens[hashpos(pos)] = {pos=pos, fmodif=false}
 		end
@@ -441,6 +448,62 @@ minetest.register_node("forth_computer:screen",{
 	end,
 })
 
+local on_disk_digiline_receive = function (pos, node, channel, msg)
+	local meta = minetest.get_meta(pos)
+	if channel == meta:get_string("channel") then
+		local page = string.byte(msg, 1)
+		if page==nil then return end
+		local inv = meta:get_inventory()
+		local stack = inv:get_stack("floppy", 1):to_table()
+		if stack.name ~= "forth_computer:floppy" then return end
+		if stack.metadata == "" then stack.metadata = string.rep(string.char(0), 16384) end
+		msg = string.sub(msg, 2, -1)
+		if string.len(msg) == 0 then -- read
+			local ret = string.sub(stack.metadata, page*64+1, page*64+64)
+			print(ret)
+			digiline:receptor_send(pos, digiline.rules.default, channel, ret)
+		else -- write
+			if string.len(msg) ~= 64 then return end
+			stack.metadata = string.sub(stack.metadata, 1, page*64)..msg..string.sub(stack.metadata, page*64+65, -1)
+		end
+	end
+end
+
+minetest.register_node("forth_computer:disk",{
+	description = "Disk drive",
+	tiles = {"disk.png"},
+	groups = {cracky=3},
+	sounds = default.node_sound_stone_defaults(),
+	digiline = 
+	{
+		receptor = {},
+		effector = {action = on_disk_digiline_receive},
+	},
+	on_construct = function(pos)
+		local meta=minetest.get_meta(pos)
+		local inv = meta:get_inventory()
+		inv:set_size("floppy", 1)
+		meta:set_string("formspec", "size[9,5.5;]"..
+					"field[0,0.5;7,1;channel;Channel:;${channel}]"..
+					"list[current_name;floppy;8,0;1,1;]"..
+					"list[current_player;main;0,1.5;8,4;]")
+	end,
+	allow_metadata_inventory_put = function(pos, listname, index, stack, player)
+		if stack:get_name() == "forth_computer:floppy" then return 1 end
+		return 0
+	end,
+	on_receive_fields = function(pos, formname, fields, sender)
+		local meta = minetest.get_meta(pos)
+		fields.channel = fields.channel or ""
+		meta:set_string("channel", fields.channel)
+	end,
+})
+
+
+minetest.register_craftitem("forth_computer:floppy",{
+	description = "Floppy disk",
+	inventory_image = "floppy.png",
+})
 
 minetest.register_globalstep(function(dtime)
 	for _,i in pairs(cptrs) do
@@ -466,16 +529,12 @@ minetest.register_on_shutdown(function()
 	write_file(wpath.."/screens",screens)
 end)
 
-function escape(x)
-	return string.gsub(string.gsub(string.gsub(x,";","\\;"), "%]", "\\]"), "%[", "\\[")
-end
-
 function create_formspec(text)
 	local f = lines(text)
 	s = "size[5,4.5;"
 	i = -0.25
 	for _,x in ipairs(f) do
-		s = s.."]label[0,"..tostring(i)..";"..escape(x)--minetest.formspec_escape(x)
+		s = s.."]label[0,"..tostring(i)..";"..minetest.formspec_escape(x)
 		i = i+0.3
 	end
 	s = s.."]field[0.3,"..tostring(i+0.4)..";4.4,1;f;;]"
