@@ -243,7 +243,7 @@ def compile_def(name, l, immed=False):
     here += 2
 
 memory=[0]*0x10000
-here=0x404
+here=0x40c
 latest=0
 state="forth"
 for i in lf:
@@ -271,20 +271,39 @@ for i in squit:
     
 memory[0x108]=10
 memory[0x400]=0x4d
-setmemory(0x401, df["COLD"])
-memory[0x403]=0x1a
+memory[0x401]=0x00
+memory[0x402]=0x02
+memory[0x403]=0x18
+memory[0x404]=0x4d
+memory[0x405]=0x00
+memory[0x406]=0x03
+memory[0x407]=0x19
+memory[0x408]=0x4d
+setmemory(0x409, df["COLD"])
+memory[0x40b]=0x1a
 setmemory(0x10c, latest)
 setmemory(0x112, here)
+
+memory[0xff00]=0x4d
+memory[0xff01]=0x00
+memory[0xff02]=0x04
+memory[0xff03]=0x1a
 
 def getc(i):
     for key,k in df.items():
         if k==i:
             return key
 
-f = open('computer_memory.lua','w')
-f.write("function create_cptr_memory()\n\treturn {\n")
-for i in range(len(memory)):
-    f.write("\t\t["+str(i)+"] = "+str(memory[i])+",\n")
-f.write("\t}\nend")
+#f = open('computer_memory.lua','w')
+#f.write("function create_cptr_memory()\n\treturn {\n")
+#for i in range(len(memory)):
+#    f.write("\t\t["+str(i)+"] = "+str(memory[i])+",\n")
+#f.write("\t}\nend")
+#f.close()
+f = open('forth_floppy.lua','w')
+f.write("function create_forth_floppy()\n\treturn \"")
+for i in range(2**14):
+    f.write("\\%03d"%memory[i])
+f.write("\"\nend")
 f.close()
 

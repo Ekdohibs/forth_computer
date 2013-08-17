@@ -23,6 +23,7 @@ local modpath = minetest.get_modpath("forth_computer")
 local bit32 = loadpkg("bit32")
 
 dofile(modpath.."/computer_memory.lua")
+dofile(modpath.."/forth_floppy.lua")
 
 local function s16(x)
 	if bit32.band(x, 0x8000)~=0 then
@@ -185,6 +186,7 @@ local function send_message(pos, cptr, maddr, mlen)
 end
 
 local function run_computer(pos,cptr)
+	if cptr.stopped then return end
 	cptr.cycles = math.max(MAX_CYCLES,cptr.cycles+CYCLES_PER_STEP)
 	while 1 do
 		instr = cptr[cptr.PC]
@@ -208,10 +210,11 @@ local function create_cptr()
 	cptr.Y = 0
 	cptr.Z = 0
 	cptr.I = 0
-	cptr.PC = 0x400
-	cptr.RP = 0x300
-	cptr.SP = 0x200
+	cptr.PC = 0xff00
+	cptr.RP = 0
+	cptr.SP = 0
 	cptr.paused = false
+	cptr.stopped = true
 	cptr.has_input = false
 	cptr.digiline_events = {}
 	cptr.channel = ""
@@ -397,6 +400,10 @@ minetest.register_node("forth_computer:computer",{
 	on_destruct = function(pos)
 		cptrs[hashpos(pos)] = nil
 	end,
+	on_punch = function(pos, node, puncher)
+		local cptr = cptrs[hashpos(pos)].cptr
+		cptr.stopped = not cptr.stopped
+	end,
 })
 
 local on_screen_digiline_receive = function (pos, node, channel, msg)
@@ -420,7 +427,7 @@ minetest.register_node("forth_computer:screen",{
 	},
 	on_construct = function(pos)
 		local meta=minetest.get_meta(pos)
-		meta:set_string("text","\n\n\n\n\n\n\n\n\n\n")
+		meta:set_string("text","\n\n\n\n\n\n\n\n\n\n\n\n")
 		screens[hashpos(pos)] = {pos=pos, fmodif=false}
 		meta:set_string("formspec", "field[channel;Channel;${channel}]")
 	end,
@@ -455,17 +462,18 @@ local on_disk_digiline_receive = function (pos, node, channel, msg)
 		if page==nil then return end
 		local inv = meta:get_inventory()
 		local stack = inv:get_stack("floppy", 1):to_table()
+		if stack == nil then return end
 		if stack.name ~= "forth_computer:floppy" then return end
 		if stack.metadata == "" then stack.metadata = string.rep(string.char(0), 16384) end
 		msg = string.sub(msg, 2, -1)
 		if string.len(msg) == 0 then -- read
 			local ret = string.sub(stack.metadata, page*64+1, page*64+64)
-			print(ret)
 			digiline:receptor_send(pos, digiline.rules.default, channel, ret)
 		else -- write
 			if string.len(msg) ~= 64 then return end
 			stack.metadata = string.sub(stack.metadata, 1, page*64)..msg..string.sub(stack.metadata, page*64+65, -1)
 		end
+		inv:set_stack("floppy", 1, ItemStack(stack))
 	end
 end
 
@@ -499,10 +507,52 @@ minetest.register_node("forth_computer:disk",{
 	end,
 })
 
+local progs = {["Empty"] = string.rep(string.char(0), 16536), ["Forth Boot Disk"] = create_forth_floppy()}
+minetest.register_node("forth_computer:floppy_programmator",{
+	description = "Floppy disk programmator",
+	tiles = {"programmator.png"},
+	groups = {cracky=3},
+	sounds = default.node_sound_stone_defaults(),
+	on_construct = function(pos)
+		local meta=minetest.get_meta(pos)
+		local inv = meta:get_inventory()
+		inv:set_size("floppy", 1)
+		meta:set_int("selected", 1)
+		local s = "size[8,5.5;]"..
+			"dropdown[0,0;5;pselector;"
+		for key, _ in pairs(progs) do
+			s = s..key..","
+		end
+		s = string.sub(s, 1, -2)
+		s = s.. ";1]"..
+			"button[5,0;2,1;prog;Program]"..
+			"list[current_name;floppy;7,0;1,1;]"..
+			"list[current_player;main;0,1.5;8,4;]"
+		meta:set_string("formspec", s)
+	end,
+	allow_metadata_inventory_put = function(pos, listname, index, stack, player)
+		if stack:get_name() == "forth_computer:floppy" then return 1 end
+		return 0
+	end,
+	on_receive_fields = function(pos, formname, fields, sender)
+		local meta = minetest.get_meta(pos)
+		if fields.prog then
+			local inv = meta:get_inventory()
+			local prog = progs[fields.pselector]
+			local stack = inv:get_stack("floppy", 1):to_table()
+			if stack == nil then return end
+			if stack.name ~= "forth_computer:floppy" then return end
+			stack.metadata = prog
+			inv:set_stack("floppy", 1, ItemStack(stack))
+		end
+	end,
+})
+
 
 minetest.register_craftitem("forth_computer:floppy",{
 	description = "Floppy disk",
 	inventory_image = "floppy.png",
+	stack_max = 1,
 })
 
 minetest.register_globalstep(function(dtime)
@@ -529,8 +579,17 @@ minetest.register_on_shutdown(function()
 	write_file(wpath.."/screens",screens)
 end)
 
+function escape(text)
+	-- Remove all \0's in the string, that cannot be done using string.gsub as there can't be \0's in a pattern
+	text2 = ""
+	for i=1, string.len(text) do
+		if string.byte(text, i)~=0 then text2 = text2..string.sub(text, i, i) end
+	end
+	return minetest.formspec_escape(text2)
+end
+
 function create_formspec(text)
-	local f = lines(text)
+	--[[local f = lines(text)
 	s = "size[5,4.5;"
 	i = -0.25
 	for _,x in ipairs(f) do
@@ -538,7 +597,8 @@ function create_formspec(text)
 		i = i+0.3
 	end
 	s = s.."]field[0.3,"..tostring(i+0.4)..";4.4,1;f;;]"
-	return s
+	return s]]
+	return "size[5,4.5;]textarea[0.3,0;4.4,4.1;;"..escape(text)..";]field[0.3,3.6;4.4,1;f;;]"
 end
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
@@ -552,8 +612,6 @@ minetest.register_on_player_receive_fields(function(player, formname, fields)
 	end
 	digiline:receptor_send(pos, digiline.rules.default, "screen", fields["f"])
 	local meta = minetest.get_meta(pos)
-	--local ntext = newline(meta:get_string("text"),fields["f"])
-	--local ntext = meta:get_string("text")..fields["f"]
 	local ntext = add_text(meta:get_string("text"), fields["f"])
 	meta:set_string("text",ntext)
 	minetest.show_formspec(player:get_player_name(),formname,create_formspec(ntext))
