@@ -25,6 +25,19 @@ local bit32 = loadpkg("bit32")
 dofile(modpath.."/computer_memory.lua")
 dofile(modpath.."/forth_floppy.lua")
 
+function hacky_swap_node(pos,name)
+   local node = minetest.get_node(pos)
+   if node.name ~= name then
+      local meta = minetest.get_meta(pos)
+      local meta0 = meta:to_table()
+      node.name = name
+      minetest.set_node(pos,node)
+      meta = minetest.get_meta(pos)
+      meta:from_table(meta0)
+   end
+   return node.name
+end
+
 local function s16(x)
 	if bit32.band(x, 0x8000)~=0 then
 		return bit32.band(x, 0xffff)-0x10000
@@ -385,8 +398,37 @@ local on_computer_digiline_receive = function (pos, node, channel, msg)
 end
 
 minetest.register_node("forth_computer:computer",{
+	description = "Computer on (you hacker you)",
+	tiles = {"cpu_top.png", "cpu_bottom.png", "cpu_right.png", "cpu_left.png", "cpu_back.png", "cpu_front.png"},
+	groups = {cracky=3, not_in_creative_inventory=1},
+	sounds = default.node_sound_stone_defaults(),
+	digiline = 
+	{
+		receptor = {},
+		effector = {action = on_computer_digiline_receive},
+	},
+	on_construct = function(pos)
+		if cptrs[hashpos(pos)] then return end
+		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
+	end,
+	on_destruct = function(pos)
+		if cptrs[hashpos(pos)].swapping then
+			cptrs[hashpos(pos)].swapping = nil
+			return
+		end
+		cptrs[hashpos(pos)] = nil
+	end,
+	on_punch = function(pos, node, puncher)
+		local cptr = cptrs[hashpos(pos)].cptr
+		cptr.stopped = true
+		cptr.swapping = true
+		hacky_swap_node(pos, "forth_computer:computer_off")
+	end,
+})
+
+minetest.register_node("forth_computer:computer_off",{
 	description = "Computer",
-	tiles = {"computer.png"},
+	tiles = {"cpu_top.png", "cpu_bottom.png", "cpu_right.png", "cpu_left.png", "cpu_back.png", "cpu_front_off.png"},
 	groups = {cracky=3},
 	sounds = default.node_sound_stone_defaults(),
 	digiline = 
@@ -395,14 +437,21 @@ minetest.register_node("forth_computer:computer",{
 		effector = {action = on_computer_digiline_receive},
 	},
 	on_construct = function(pos)
+		if cptrs[hashpos(pos)] then return end
 		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
 	end,
 	on_destruct = function(pos)
+		if cptrs[hashpos(pos)].swapping then
+			cptrs[hashpos(pos)].swapping = nil
+			return
+		end
 		cptrs[hashpos(pos)] = nil
 	end,
 	on_punch = function(pos, node, puncher)
 		local cptr = cptrs[hashpos(pos)].cptr
-		cptr.stopped = not cptr.stopped
+		cptr.stopped = false
+		cptr.swapping = true
+		hacky_swap_node(pos, "forth_computer:computer")
 	end,
 })
 
