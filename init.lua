@@ -589,21 +589,21 @@ function escape(text)
 end
 
 function create_formspec(text)
-	--[[local f = lines(text)
+	local f = lines(text)
 	s = "size[5,4.5;"
 	i = -0.25
 	for _,x in ipairs(f) do
-		s = s.."]label[0,"..tostring(i)..";"..minetest.formspec_escape(x)
+		s = s.."]label[0,"..tostring(i)..";"..escape(x)
 		i = i+0.3
 	end
 	s = s.."]field[0.3,"..tostring(i+0.4)..";4.4,1;f;;]"
-	return s]]
-	return "size[5,4.5;]textarea[0.3,0;4.4,4.1;;"..escape(text)..";]field[0.3,3.6;4.4,1;f;;]"
+	return s
+	--return "size[5,4.5;]textarea[0.3,0;4.4,4.1;;"..escape(text)..";]field[0.3,3.6;4.4,1;f;;]"
 end
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if formname:sub(1,6)~="screen" then return end
-	if fields["f"]==nil or fields["f"]=="" then return end
+	if fields["f"]==nil then return end
 	local pos = dehashpos(formname:sub(7,-1))
 	local s = screens[hashpos(pos)]
 	if s==nil then return end
