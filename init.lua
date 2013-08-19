@@ -399,6 +399,7 @@ end
 
 minetest.register_node("forth_computer:computer",{
 	description = "Computer on (you hacker you)",
+	paramtype2 = "facedir",
 	tiles = {"cpu_top.png", "cpu_bottom.png", "cpu_right.png", "cpu_left.png", "cpu_back.png", "cpu_front.png"},
 	groups = {cracky=3, not_in_creative_inventory=1},
 	sounds = default.node_sound_stone_defaults(),
@@ -428,6 +429,7 @@ minetest.register_node("forth_computer:computer",{
 
 minetest.register_node("forth_computer:computer_off",{
 	description = "Computer",
+	paramtype2 = "facedir",
 	tiles = {"cpu_top.png", "cpu_bottom.png", "cpu_right.png", "cpu_left.png", "cpu_back.png", "cpu_front_off.png"},
 	groups = {cracky=3},
 	sounds = default.node_sound_stone_defaults(),
@@ -466,7 +468,19 @@ end
 
 minetest.register_node("forth_computer:screen",{
 	description = "Screen",
-	tiles = {"screen.png"},
+	tiles = {"screen_top.png", "screen_bottom.png", "screen_right.png", "screen_left.png", "screen_back.png", "screen_front.png"},
+	drawtype = "nodebox",
+	paramtype = "light",
+	paramtype2 = "facedir",
+	node_box = {
+		type = "fixed",
+		fixed = {
+			-- X Y Z W H L
+			{ -16/32, -16/32, 1/32, 16/32, 16/32, 13/32 }, -- Monitor Screen
+			{ -13/32, -13/32, 13/32, 13/32, 13/32, 16/32 }, -- Monitor Tube
+			{ -16/32, -16/32, -16/32, 16/32, -12/32, 1/32 }, -- Keyboard
+			}
+	},
 	groups = {cracky=3},
 	sounds = default.node_sound_stone_defaults(),
 	digiline = 
