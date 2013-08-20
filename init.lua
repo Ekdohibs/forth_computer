@@ -498,6 +498,7 @@ minetest.register_node("forth_computer:screen",{
 		local meta=minetest.get_meta(pos)
 		meta:set_string("text","\n\n\n\n\n\n\n\n\n\n\n\n")
 		screens[hashpos(pos)] = {pos=pos, fmodif=false}
+		meta:set_string("channel", "")
 		meta:set_string("formspec", "field[channel;Channel;${channel}]")
 	end,
 	on_receive_fields = function(pos, formname, fields, sender)
@@ -560,10 +561,16 @@ minetest.register_node("forth_computer:disk",{
 		local meta=minetest.get_meta(pos)
 		local inv = meta:get_inventory()
 		inv:set_size("floppy", 1)
+		meta:set_string("channel", "")
 		meta:set_string("formspec", "size[9,5.5;]"..
 					"field[0,0.5;7,1;channel;Channel:;${channel}]"..
 					"list[current_name;floppy;8,0;1,1;]"..
 					"list[current_player;main;0,1.5;8,4;]")
+	end,
+	can_dig = function(pos, player)
+		local meta = minetest.get_meta(pos)
+		local inv = meta:get_inventory()
+		return inv:is_empty("floppy")
 	end,
 	allow_metadata_inventory_put = function(pos, listname, index, stack, player)
 		if stack:get_name() == "forth_computer:floppy" then return 1 end
@@ -599,6 +606,11 @@ minetest.register_node("forth_computer:floppy_programmator",{
 			"list[current_name;floppy;7,0;1,1;]"..
 			"list[current_player;main;0,1.5;8,4;]"
 		meta:set_string("formspec", s)
+	end,
+	can_dig = function(pos, player)
+		local meta = minetest.get_meta(pos)
+		local inv = meta:get_inventory()
+		return inv:is_empty("floppy")
 	end,
 	allow_metadata_inventory_put = function(pos, listname, index, stack, player)
 		if stack:get_name() == "forth_computer:floppy" then return 1 end
