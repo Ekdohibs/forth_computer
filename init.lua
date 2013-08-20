@@ -195,6 +195,8 @@ end
 local function send_message(pos, cptr, maddr, mlen)
 	local msg = string_at(cptr, maddr, mlen)
 	cptr.digiline_events[cptr.channel] = msg
+	--print(cptr.channel)
+	--print(msg)
 	digiline:receptor_send(pos, digiline.rules.default, cptr.channel, msg)
 end
 
@@ -413,6 +415,7 @@ minetest.register_node("forth_computer:computer",{
 		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
 	end,
 	on_destruct = function(pos)
+		if cptrs[hashpos(pos)] == nil then return end
 		if cptrs[hashpos(pos)].swapping then
 			cptrs[hashpos(pos)].swapping = nil
 			return
@@ -420,9 +423,10 @@ minetest.register_node("forth_computer:computer",{
 		cptrs[hashpos(pos)] = nil
 	end,
 	on_punch = function(pos, node, puncher)
+		if cptrs[hashpos(pos)] == nil then return end
 		local cptr = cptrs[hashpos(pos)].cptr
 		cptr.stopped = true
-		cptr.swapping = true
+		cptrs[hashpos(pos)].swapping = true
 		hacky_swap_node(pos, "forth_computer:computer_off")
 	end,
 })
@@ -443,6 +447,7 @@ minetest.register_node("forth_computer:computer_off",{
 		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
 	end,
 	on_destruct = function(pos)
+		if cptrs[hashpos(pos)] == nil then return end
 		if cptrs[hashpos(pos)].swapping then
 			cptrs[hashpos(pos)].swapping = nil
 			return
@@ -450,9 +455,10 @@ minetest.register_node("forth_computer:computer_off",{
 		cptrs[hashpos(pos)] = nil
 	end,
 	on_punch = function(pos, node, puncher)
+		if cptrs[hashpos(pos)] == nil then return end
 		local cptr = cptrs[hashpos(pos)].cptr
 		cptr.stopped = false
-		cptr.swapping = true
+		cptrs[hashpos(pos)].swapping = true
 		hacky_swap_node(pos, "forth_computer:computer")
 	end,
 })
@@ -570,7 +576,8 @@ minetest.register_node("forth_computer:disk",{
 	end,
 })
 
-local progs = {["Empty"] = string.rep(string.char(0), 16536), ["Forth Boot Disk"] = create_forth_floppy()}
+local progs = {["Empty"] = string.rep(string.char(0), 16536),
+		["Forth Boot Disk"] = create_forth_floppy(),}
 minetest.register_node("forth_computer:floppy_programmator",{
 	description = "Floppy disk programmator",
 	tiles = {"programmator.png"},
