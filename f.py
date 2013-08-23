@@ -8,6 +8,10 @@ def setmemory(addr, value):
     memory[addr] = value&0xff
     memory[addr+1] = (value>>8)&0xff
 
+def getmemory(addr):
+    return (memory[addr+1]<<8)+memory[addr]
+   
+
 def to_int(x):
     if x[:2]=="0x":
         try:
@@ -106,12 +110,15 @@ def compile_assembly(name, l):
         here += 1
 
 squit = []
-def compile_def(name, l, immed=False):
+def compile_def(name, l, immed=False, save_in=None):
     global here
     global squit
-    header(name)
-    if immed:
-        memory[here-1] |= 128
+    if name == "":
+        setmemory(save_in, here)
+    else:
+        header(name)
+        if immed:
+            memory[here-1] |= 128
     memory[here] = 42
     here += 1
     i = 0
@@ -259,7 +266,10 @@ for i in lf:
         if k[0][0] == "\\":
             continue
         if state=="forth":
-            if k[-1] == "IMMEDIATE":
+            if k[0] == ":NONAME":
+                #print(getmemory(df[k[-2]]+1))
+                compile_def("",k[1:-3],False, getmemory(df[k[-2]]+1))
+            elif k[-1] == "IMMEDIATE":
                 compile_def(k[1],k[2:-2],True)
             else:
                 compile_def(k[1],k[2:-1])

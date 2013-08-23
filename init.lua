@@ -549,7 +549,8 @@ end
 
 minetest.register_node("forth_computer:disk",{
 	description = "Disk drive",
-	tiles = {"disk.png"},
+	paramtype2 = "facedir",
+	tiles = {"floppy_drive_top.png", "floppy_drive_bottom.png", "floppy_drive_right.png", "floppy_drive_left.png", "floppy_drive_back.png", "floppy_drive_front.png"},
 	groups = {cracky=3},
 	sounds = default.node_sound_stone_defaults(),
 	digiline = 
@@ -582,6 +583,19 @@ minetest.register_node("forth_computer:disk",{
 		meta:set_string("channel", fields.channel)
 	end,
 })
+
+local function create_from_file(filename)
+	local f = io.open(filename, "r")
+	if f==nil then return {} end
+	local t = f:read("*all")
+	f:close()
+	local l = lines(t)
+	for key, i in ipairs(l) do
+		l[key] = i..string.rep(string.char(0), 64-string.len(i))
+	end
+	t = table.concat(l, "")
+	return t..string.rep(string.char(0), 16536-string.len(t))
+end
 
 local progs = {["Empty"] = string.rep(string.char(0), 16536),
 		["Forth Boot Disk"] = create_forth_floppy(),}
