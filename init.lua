@@ -601,7 +601,7 @@ local progs = {["Empty"] = string.rep(string.char(0), 16536),
 		["Forth Boot Disk"] = create_forth_floppy(),}
 minetest.register_node("forth_computer:floppy_programmator",{
 	description = "Floppy disk programmator",
-	tiles = {"programmator.png"},
+	{"floppy_programmator_top.png", "floppy_programmator_bottom.png", "floppy_programmator_right.png", "floppy_programmator_left.png", "floppy_programmator_back.png", "floppy_programmator_front.png"},
 	groups = {cracky=3},
 	sounds = default.node_sound_stone_defaults(),
 	on_construct = function(pos)
