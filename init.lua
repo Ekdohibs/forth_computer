@@ -598,10 +598,11 @@ local function create_from_file(filename)
 end
 
 local progs = {["Empty"] = string.rep(string.char(0), 16536),
-		["Forth Boot Disk"] = create_forth_floppy(),}
+		["Forth Boot Disk"] = create_forth_floppy(),
+		["Double number library"] = create_from_file(modpath.."/double_compressed.fth")}
 minetest.register_node("forth_computer:floppy_programmator",{
 	description = "Floppy disk programmator",
-	{"floppy_programmator_top.png", "floppy_programmator_bottom.png", "floppy_programmator_right.png", "floppy_programmator_left.png", "floppy_programmator_back.png", "floppy_programmator_front.png"},
+	tiles = {"floppy_programmator_top.png", "floppy_programmator_bottom.png", "floppy_programmator_right.png", "floppy_programmator_left.png", "floppy_programmator_back.png", "floppy_programmator_front.png"},
 	groups = {cracky=3},
 	sounds = default.node_sound_stone_defaults(),
 	on_construct = function(pos)
