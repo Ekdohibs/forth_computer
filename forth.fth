@@ -1,6 +1,7 @@
 ASSEMBLER
 : EXIT 0x28 0x29 ;
 : (lit) 0x2b 0x21 0x29 ;
+: (dodoes) 0x2b 0x21 0x2b 0x1b 0x29 ;
 : DUP 0x30 0x21 0x29 ;
 : SWAP 0x31 0x32 0x21 0x22 0x29 ;
 : ROT 0x31 0x32 0x33 0x22 0x21 0x23 0x29 ;
@@ -176,8 +177,7 @@ FORTH
 : POSTPONE ' DUP 1- C@ 128 AND IF , ELSE ['] (lit) , , ['] , , THEN ; IMMEDIATE
 : LITERAL ['] (lit) , , ; IMMEDIATE
 : NLITERAL DUP >R 0 DO ['] (lit) , 0 , LOOP R> 0 DO HERE 2 - I 4 * - ! LOOP ; IMMEDIATE
-: (dodoes) ['] (branch) LATEST @ 1+ ! LATEST @ 7 + R@ CELL+ ! R> LATEST @ 3 + ! ;
-: DOES> ['] (dodoes) , ['] (lit) , 0 , ; IMMEDIATE
+: DOES> ['] (dodoes) LATEST @ 1+ ! R> LATEST @ 5 + ! ;
 : ['] ' POSTPONE LITERAL ; IMMEDIATE
 : [COMPILE] ' , ; IMMEDIATE
 : ; ['] EXIT , LATEST ! POSTPONE [ ; IMMEDIATE

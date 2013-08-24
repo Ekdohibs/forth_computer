@@ -599,7 +599,8 @@ end
 
 local progs = {["Empty"] = string.rep(string.char(0), 16536),
 		["Forth Boot Disk"] = create_forth_floppy(),
-		["Double number library"] = create_from_file(modpath.."/double_compressed.fth")}
+		["Double number library"] = create_from_file(modpath.."/double_compressed.fth"),
+		["Floating point number library"] = create_from_file(modpath.."/float.fth")}
 minetest.register_node("forth_computer:floppy_programmator",{
 	description = "Floppy disk programmator",
 	tiles = {"floppy_programmator_top.png", "floppy_programmator_bottom.png", "floppy_programmator_right.png", "floppy_programmator_left.png", "floppy_programmator_back.png", "floppy_programmator_front.png"},
