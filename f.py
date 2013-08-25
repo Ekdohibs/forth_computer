@@ -223,26 +223,20 @@ def compile_def(name, l, immed=False, save_in=None):
             squit.append(here)
             here += 2
         elif word == 'S"':
-            nw = l[i][:-1] #Remove trailing "
+            nw = ""
+            while l[i][-1] != '"':
+                nw += l[i]
+                nw += " "
+                i += 1
+            nw += l[i][:-1] #Remove trailing "
             i += 1
-            setmemory(here, df["(branch)"])
-            here += 2
-            stack.append(here)
-            here += 2
-            stack.append(here)
-            for c in nw:
-                memory[here] = ord(c)
-                here += 1
-            k = stack.pop()
-            setmemory(stack.pop(), here)
-            setmemory(here, df["(lit)"])
-            here += 2
-            setmemory(here, k)
-            here += 2
-            setmemory(here, df["(lit)"])
+            setmemory(here, df["(slit)"])
             here += 2
             setmemory(here, len(nw))
             here += 2
+            for c in nw:
+                memory[here] = ord(c)
+                here += 1
         else:
             setmemory(here, df[word])
             here += 2
