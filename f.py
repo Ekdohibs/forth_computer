@@ -53,7 +53,7 @@ def compile_constant(name, value):
     memory[here] = 41
     here += 1
 
-"""ITABLE = {
+ITABLE = {
 "IPOP":0x28,
 "NXT":0x29,
 "CALL":0x2a,
@@ -98,15 +98,63 @@ def compile_constant(name, value):
 "CWXY":0x35,
 "CWYX":0x36,
 
-}"""
+"ADD":0x0c,
+"SUB":0x0d,
+"MUL":0x0e,
+"SMUL":0x0f,
+"DIV":0x1e,
+"SDIV":0x1f,
 
+"AND":0x2c,
+"OR": 0x2d,
+"XOR":0x2e,
+"NOT":0x2f,
+"RSH":0x3c,
+"ASH":0x3d,
+"LSH":0x3e,
+"SIGN":0x3f,
+
+"JMP":0x38,
+"XJMP":0x39,
+"YJMP":0x3a,
+"ZJMP":0x3b,
+
+"TXS":0x18,
+"TXR":0x19,
+"TXP":0x1a,
+"TXI":0x1b,
+
+"TXZ":0x40,
+"TYZ":0x41,
+"TZX":0x42,
+"TZY":0x43,
+"TYX":0x44,
+"TXY":0x45,
+
+"DECX":0x46,
+"DECY":0x47,
+"DECZ":0x48,
+"INCX":0x49,
+"INCY":0x4a,
+"INCZ":0x4b,
+
+"ENTX":0x4d,
+"ENTY":0x4e,
+"ENTZ":0x4f,
+
+"RCV":0x52,
+"DMSG":0x53,
+"SEND":0x54,
+"CHAN":0x55,
+}
 
 def compile_assembly(name, l):
     global here
     header(name)
     for inst in l:
-        memory[here] = to_int(inst)
+        #memory[here] = to_int(inst)
         #memory[here] = ITABLE[inst]
+        memory[here] = ITABLE.get(inst, to_int(inst))&0xff
         here += 1
 
 squit = []
