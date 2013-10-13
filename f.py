@@ -25,7 +25,7 @@ def to_int(x):
     except:
         return None
 
-def header(name):
+def header(name, lt=None):
     global here
     global latest
     memory[here] = 0
@@ -33,17 +33,57 @@ def header(name):
     for c in name.strip():
         memory[here] = ord(c)
         here += 1
-    setmemory(here, latest)
+    if lt!=None:
+        setmemory(here, lt)
+    else:
+        setmemory(here, latest)
     here += 2
     memory[here] = len(name)
     here += 1
-    latest = here
-    df[name] = here
+    if lt==None:
+        latest = here
+        df[name] = here
 
 def compile_constant(name, value):
     value=to_int(value)
     global here
     header(name)
+    memory[here] = 77
+    here += 1
+    setmemory(here, value)
+    here += 2
+    memory[here] = 33
+    here += 1
+    memory[here] = 41
+    here += 1
+    
+def env_compile_2constant(name, value):
+    value=to_int(value)
+    global here
+    global env_latest
+    header(name, env_latest)
+    env_latest = here
+    memory[here] = 77
+    here += 1
+    setmemory(here, value&0xffff)
+    here += 2
+    memory[here] = 33
+    here += 1
+    memory[here] = 77
+    here += 1
+    setmemory(here, value>>16)
+    here += 2
+    memory[here] = 33
+    here += 1
+    memory[here] = 41
+    here += 1
+
+def env_compile_constant(name, value):
+    value=to_int(value)
+    global here
+    global env_latest
+    header(name, env_latest)
+    env_latest = here
     memory[here] = 77
     here += 1
     setmemory(here, value)
@@ -267,6 +307,12 @@ def compile_def(name, l, immed=False, save_in=None):
             setmemory(here, stack.pop())
             here += 2
             setmemory(stack.pop(), here)
+        elif word == "+LOOP":
+            setmemory(here, df["(+loop)"])
+            here += 2
+            setmemory(here, stack.pop())
+            here += 2
+            setmemory(stack.pop(), here)
         elif word == "QUIT":
             squit.append(here)
             here += 2
@@ -294,15 +340,24 @@ def compile_def(name, l, immed=False, save_in=None):
 memory=[0]*0x10000
 here=0x40c
 latest=0
+env_latest = 0
 state="forth"
 for i in lf:
     k = i.split()
     if len(k)>=1 and k[0] == "ASSEMBLER":
         state="assembler"
+    elif len(k)>=1 and k[0] == "ENVIRONMENT":
+        state="env"
     elif len(k)>=1 and k[0] == "FORTH":
         state="forth"
     elif len(k)>=3 and k[1] == "CONSTANT" and k[0]!=":":
-        compile_constant(k[2],k[0])
+        if state == "env":
+            env_compile_constant(k[2], k[0])
+        else:
+            compile_constant(k[2],k[0])
+    elif len(k)>=3 and k[1] == "2CONSTANT" and k[0]!=":":
+        if state == "env":
+            env_compile_2constant(k[2], k[0])
     elif len(k)>=3:
         #print(k[0])
         if k[0][0] == "\\":
@@ -335,6 +390,12 @@ setmemory(0x409, df["COLD"])
 memory[0x40b]=0x1a
 setmemory(0x10c, latest)
 setmemory(0x112, here)
+setmemory(0x1a6, 1)
+setmemory(0x1b0, latest)
+setmemory(0x1b2, env_latest)
+setmemory(0x1a4, 0x1b0)
+setmemory(0x1d0, 0x1b0)
+setmemory(0x1a2, 0x1b4)
 
 memory[0xff00]=0x4d
 memory[0xff01]=0x00

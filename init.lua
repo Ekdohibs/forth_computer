@@ -25,6 +25,26 @@ local bit32 = loadpkg("bit32")
 dofile(modpath.."/computer_memory.lua")
 dofile(modpath.."/forth_floppy.lua")
 
+local wpath = minetest.get_worldpath()
+local function read_file(fn)
+	local f = io.open(fn, "r")
+	if f==nil then return {} end
+	local t = f:read("*all")
+	f:close()
+	if t=="" or t==nil then return {} end
+	return minetest.deserialize(t)
+end
+
+local function write_file(fn, tbl)
+	local f = io.open(fn, "w")
+	f:write(minetest.serialize(tbl))
+	f:close()
+end
+
+local cptrs = read_file(wpath.."/forth_computers")
+local oldcptrs = read_file(wpath.."/forth_computers")
+local screens = read_file(wpath.."/screens")
+
 function hacky_swap_node(pos,name)
    local node = minetest.get_node(pos)
    if node.name ~= name then
@@ -195,19 +215,33 @@ end
 local function send_message(pos, cptr, maddr, mlen)
 	local msg = string_at(cptr, maddr, mlen)
 	cptr.digiline_events[cptr.channel] = msg
-	--print(cptr.channel)
-	--print(msg)
 	digiline:receptor_send(pos, digiline.rules.default, cptr.channel, msg)
 end
 
 local function run_computer(pos,cptr)
+	local meta = minetest.get_meta(pos)
+	local oldpos = meta:get_string("pos")
+	if oldpos == "" then
+		return
+	end
+	oldpos = minetest.deserialize(oldpos)
+	if oldpos.x ~= pos.x or oldpos.y ~= pos.y or oldpos.z ~= pos.z then
+		local old_cptr = oldcptrs[hashpos(oldpos)]
+		for key, _ in pairs(oldcptrs) do
+			print(key)
+		end
+		meta:set_string("pos", minetest.serialize(pos))
+		print(hashpos(oldpos))
+		if old_cptr ~= nil then
+			cptrs[hashpos(pos)].cptr = old_cptr.cptr
+		end
+	end
 	if cptr.stopped then return end
 	cptr.cycles = math.max(MAX_CYCLES,cptr.cycles+CYCLES_PER_STEP)
 	while 1 do
 		instr = cptr[cptr.PC]
 		local f = ITABLE[instr]
 		if f == nil then return end
-		--print("Instr: "..tostring(instr).." PC:  "..tostring(cptr.PC).." SP: "..tostring(cptr.SP).." RP: "..tostring(cptr.RP).." X: "..tostring(cptr.X).." Y: "..tostring(cptr.Y).." Z: "..tostring(cptr.Z).." I: "..tostring(cptr.I))
 		cptr.PC = bit32.band(cptr.PC+1, 0xffff)
 		setfenv(f, {cptr = cptr, pos=pos, emit=emit, receive=receive, delete_message=delete_message, set_channel=set_channel, send_message=send_message, u16=u16, u32=u32, s16=s16, s32=s32, read=read, write=write, readC=readC, writeC=writeC, push=push, pop=pop, rpush=rpush, rpop=rpop, bit32=bit32, math=math})
 		f()
@@ -374,25 +408,6 @@ for i, v in pairs(ITABLE_RAW) do
 	ITABLE[i] = loadstring(v) -- Parse everything at the beginning, way faster
 end
 
-local wpath = minetest.get_worldpath()
-local function read_file(fn)
-	local f = io.open(fn, "r")
-	if f==nil then return {} end
-	local t = f:read("*all")
-	f:close()
-	if t=="" or t==nil then return {} end
-	return minetest.deserialize(t)
-end
-
-local function write_file(fn, tbl)
-	local f = io.open(fn, "w")
-	f:write(minetest.serialize(tbl))
-	f:close()
-end
-
-local cptrs = read_file(wpath.."/forth_computers")
-local screens = read_file(wpath.."/screens")
-
 local on_computer_digiline_receive = function (pos, node, channel, msg)
 	local cptr = cptrs[hashpos(pos)].cptr
 	if cptr == nil then return end
@@ -413,6 +428,8 @@ minetest.register_node("forth_computer:computer",{
 	on_construct = function(pos)
 		if cptrs[hashpos(pos)] then return end
 		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
+		local meta = minetest.get_meta(pos)
+		meta:set_string("pos", minetest.serialize(pos))
 	end,
 	on_destruct = function(pos)
 		if cptrs[hashpos(pos)] == nil then return end
@@ -420,6 +437,7 @@ minetest.register_node("forth_computer:computer",{
 			cptrs[hashpos(pos)].swapping = nil
 			return
 		end
+		oldcptrs[hashpos(pos)] = cptrs[hashpos(pos)]
 		cptrs[hashpos(pos)] = nil
 	end,
 	on_punch = function(pos, node, puncher)
@@ -445,6 +463,8 @@ minetest.register_node("forth_computer:computer_off",{
 	on_construct = function(pos)
 		if cptrs[hashpos(pos)] then return end
 		cptrs[hashpos(pos)] = {pos=pos, cptr=create_cptr()}
+		local meta = minetest.get_meta(pos)
+		meta:set_string("pos", minetest.serialize(pos))
 	end,
 	on_destruct = function(pos)
 		if cptrs[hashpos(pos)] == nil then return end
@@ -452,6 +472,7 @@ minetest.register_node("forth_computer:computer_off",{
 			cptrs[hashpos(pos)].swapping = nil
 			return
 		end
+		oldcptrs[hashpos(pos)] = cptrs[hashpos(pos)]
 		cptrs[hashpos(pos)] = nil
 	end,
 	on_punch = function(pos, node, puncher)
@@ -658,6 +679,7 @@ minetest.register_globalstep(function(dtime)
 	for _,i in pairs(cptrs) do
 		run_computer(i.pos, i.cptr)
 	end
+	oldcptrs = {}
 	for _,i in pairs(screens) do
 		if i.fmodif then
 			i.fmodif=false
@@ -675,6 +697,7 @@ minetest.register_on_shutdown(function()
 		i.pname = nil
 	end
 	write_file(wpath.."/forth_computers",cptrs)
+	write_file(wpath.."/old_forth_computers",oldcptrs)
 	write_file(wpath.."/screens",screens)
 end)
 
