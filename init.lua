@@ -88,6 +88,9 @@ function lines(str)
 end
 
 local function hashpos(pos)
+	if pos.x == 0 then pos.x = 0 end -- Fix for signed 0
+	if pos.y == 0 then pos.y = 0 end -- Fix for signed 0
+	if pos.z == 0 then pos.z = 0 end -- Fix for signed 0
 	return tostring(pos.x).."\n"..tostring(pos.y).."\n"..tostring(pos.z)
 end
 
