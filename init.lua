@@ -2,14 +2,31 @@ local CYCLES_PER_STEP = 1000
 local MAX_CYCLES = 100000
 local MAX_LINE_LENGHT = 42
 
+local function file_exists(name)
+	local f = io.open(name, "r")
+	if f then
+		f:close()
+		return true
+	end
+	return false
+end
+
 function loadpkg(na)
 	local modpath = minetest.get_modpath("forth_computer")
 	local ol = package.cpath
-	local sp = {modpath.."/?.dll", modpath.."/?.so.32", modpath.."/?.so.64"}
+	local sp
+	if file_exists(modpath.."/INIT.LUA") then
+		-- On windows, if we try to open the others we get a crash
+		-- even with pcall
+		sp = {modpath.."/?.dll"}
+	else
+		sp = {modpath.."/?.so.32", modpath.."/?.so.64"}
+	end
 	for i=1,#sp do
 		package.cpath = sp[i]
 		e, lib = pcall(require, na)
 		package.cpath = ol
+		print(dump(lib))
 		if e then
 			return lib
 		end
@@ -20,7 +37,20 @@ end
 
 local modpath = minetest.get_modpath("forth_computer")
 
-local bit32 = loadpkg("bit32")
+if bit32 == nil and jit == nil then
+	-- No need to use the library if LuaJIT is there, the Lua one is more efficient
+	bit32 = loadpkg("bit32")
+end
+if bit32 == nil then
+	-- bit32 has not been loaded, using a Lua implementation of what we need
+	dofile(modpath.."/bit32.lua")
+	if jit == nil then
+		print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> "..
+			"WARNING: bit32 could not loaded, you should fix"..
+			" that or use LuaJIT for better performance"..
+			" <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+	end
+end
 
 dofile(modpath.."/computer_memory.lua")
 dofile(modpath.."/forth_floppy.lua")
@@ -138,7 +168,7 @@ end
 
 local function write(cptr, addr, value)
 	cptr[addr] = bit32.band(value, 0xff)
-	cptr[addr+1] = bit32.band(value, 0xff00)/256
+	cptr[addr+1] = bit32.band(math.floor(value/256), 0xff)
 end
 
 local function push(cptr, value)
@@ -374,39 +404,6 @@ ITABLE_RAW = {
 
 ITABLE = {}
 
-local formspec_close_table = {}
-local function on_formspec_close(name, func)
-	formspec_close_table[name] = {func=func}
-end
-
-minetest.register_globalstep(function(dtime)
-	for name, t in pairs(formspec_close_table) do
-		local player = minetest.get_player_by_name(name)
-		if player == nil then
-			t.func()
-			formspec_close_table[name] = nil
-			return
-		end
-		local pitch = player:get_look_pitch()
-		local yaw = player:get_look_yaw()
-		local pos = player:getpos()
-		if t.pitch ~= nil then
-			if pitch~=t.pitch or yaw~=t.yaw or pos.x~=t.x or pos.y~=t.y or pos.z~=t.z then
-				t.func()
-				formspec_close_table[name] = nil
-				return
-			end
-		else
-			t.pitch = pitch
-			t.yaw = yaw
-			t.x = pos.x
-			t.y = pos.y
-			t.z = pos.z
-		end
-	end
-end)
-
-
 for i, v in pairs(ITABLE_RAW) do
 	ITABLE[i] = loadstring(v) -- Parse everything at the beginning, way faster
 end
@@ -541,10 +538,6 @@ minetest.register_node("forth_computer:screen",{
 			screens[hashpos(pos)] = {pos=pos, fmodif=false}
 		end
 		screens[hashpos(pos)].pname = name
-		on_formspec_close(name, function()
-			local s = screens[hashpos(pos)]
-			if s~= nil then s.pname = nil end
-		end)
 		minetest.show_formspec(name,"screen"..hashpos(pos),create_formspec(meta:get_string("text")))
 	end,
 })
@@ -728,10 +721,15 @@ end
 
 minetest.register_on_player_receive_fields(function(player, formname, fields)
 	if formname:sub(1,6)~="screen" then return end
-	if fields["f"]==nil then return end
 	local pos = dehashpos(formname:sub(7,-1))
 	local s = screens[hashpos(pos)]
 	if s==nil then return end
+	if fields["f"]==nil or fields["f"]=="" then
+		if fields["quit"] ~= nil then
+			s.pname = nil
+		end
+		return
+	end
 	if string.len(fields["f"])>MAX_LINE_LENGHT then
 		fields["f"] = string.sub(fields["f"],1,MAX_LINE_LENGHT)
 	end
