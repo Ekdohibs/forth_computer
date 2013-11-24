@@ -26,7 +26,6 @@ function loadpkg(na)
 		package.cpath = sp[i]
 		e, lib = pcall(require, na)
 		package.cpath = ol
-		print(dump(lib))
 		if e then
 			return lib
 		end
