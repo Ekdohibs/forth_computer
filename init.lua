@@ -15,7 +15,7 @@ function loadpkg(na)
 	local modpath = minetest.get_modpath("forth_computer")
 	local ol = package.cpath
 	local sp
-	if file_exists(modpath.."/INIT.LUA") then
+	if file_exists(modpath.."/INIT.LUA") or string.sub(modpath, -15, -15) == "\\" then
 		-- On windows, if we try to open the others we get a crash
 		-- even with pcall
 		sp = {modpath.."/?.dll"}
@@ -35,7 +35,6 @@ function loadpkg(na)
 end
 
 local modpath = minetest.get_modpath("forth_computer")
-
 if bit32 == nil and jit == nil then
 	-- No need to use the library if LuaJIT is there, the Lua one is more efficient
 	bit32 = loadpkg("bit32")
